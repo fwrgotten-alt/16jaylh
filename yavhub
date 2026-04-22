@@ -1,0 +1,368 @@
+local okMain, errMain = pcall(function()
+    repeat task.wait() until game:IsLoaded()
+
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local TweenService = game:GetService("TweenService")
+    local SoundService = game:GetService("SoundService")
+    local UserInputService = game:GetService("UserInputService")
+    local Lighting = game:GetService("Lighting")
+    local TeleportService = game:GetService("TeleportService")
+    local HttpService = game:GetService("HttpService")
+    local ContentProvider = game:GetService("ContentProvider")
+    local LocalPlayer = Players.LocalPlayer
+    local Camera = workspace.CurrentCamera
+
+    -- States & Globals
+    local UIAccent = Color3.fromRGB(255, 255, 255)
+    local UITextSize = 15
+    local UIFont = Enum.Font.GothamBold
+    local RainbowUIEnabled = false
+    
+    local ESPEnabled, BoxESPEnabled, TracersEnabled, NameEspEnabled = false, false, false, false
+    local ShowHealthBars = false
+    local ESPColor = Color3.fromRGB(255, 70, 70)
+    
+    local SpeedBoostEnabled, tspeed = false, 0.1
+    local JumpBoostEnabled, JumpHeightValue = false, 7.2
+    local NoclipEnabled, InfiniteJumpEnabled = false, false
+    
+    local Window = nil
+    local DrawCache = {}
+
+    -- [MUSIC SYSTEM]
+    local GlobalMusicVolume = 0.5
+    local CurrentActiveSound = nil
+    local MuteActive = false
+
+    local MusicList = {
+        ["Track 1"] = "rbxassetid://136932193331774",
+        ["Track 2"] = "rbxassetid://138950692714324",
+        ["Track 3"] = "rbxassetid://140179571050556",
+        ["Track 4"] = "rbxassetid://140439256760765",
+        ["Track 5"] = "rbxassetid://140580823167015",
+        ["Track 6"] = "rbxassetid://107324054649919"
+    }
+
+    local function MuteSound(sound)
+        if sound:IsA("Sound") and sound.Name ~= "yav_AudioEngine" and sound.Name ~= "yav_Intro" then
+            sound.Volume = 0
+            sound:GetPropertyChangedSignal("Volume"):Connect(function()
+                if MuteActive and sound.Name ~= "yav_AudioEngine" then
+                    sound.Volume = 0
+                end
+            end)
+        end
+    end
+
+    game.DescendantAdded:Connect(function(descendant)
+        if MuteActive then MuteSound(descendant) end
+    end)
+
+    local function PlayTrack(id)
+        MuteActive = true 
+        for _, v in pairs(game:GetDescendants()) do MuteSound(v) end
+        if CurrentActiveSound then CurrentActiveSound:Stop() CurrentActiveSound:Destroy() end
+        local s = Instance.new("Sound")
+        s.Name = "yav_AudioEngine"
+        s.Parent = game:GetService("CoreGui")
+        s.SoundId = id
+        s.Volume = GlobalMusicVolume
+        s.Looped = true
+        ContentProvider:PreloadAsync({s})
+        s:Play()
+        CurrentActiveSound = s
+    end
+
+    local Skyboxes = {
+        ["Purple Nebula"] = "rbxassetid://159454299",
+        ["Night Sky"] = "rbxassetid://12064107",
+        ["Pink Day"] = "rbxassetid://271042516",
+        ["Twilight"] = "rbxassetid://264909758"
+    }
+
+    local function setSky(id)
+        local sky = Lighting:FindFirstChildOfClass("Sky") or Instance.new("Sky", Lighting)
+        sky.SkyboxBk = id sky.SkyboxDn = id sky.SkyboxFt = id sky.SkyboxLf = id sky.SkyboxRt = id sky.SkyboxUp = id
+    end
+
+    local function initExploits()
+        if workspace:GetAttribute("VIPServer") ~= tostring(LocalPlayer.UserId) then
+            workspace:SetAttribute("VIPServer", tostring(LocalPlayer.UserId))
+        end
+        workspace:SetAttribute("VIPServerOwner", LocalPlayer.Name)
+        if LocalPlayer:GetAttribute("ExtraSlots") == nil then LocalPlayer:SetAttribute("ExtraSlots", false) end
+        if LocalPlayer:GetAttribute("EmoteSearchBar") == nil then LocalPlayer:SetAttribute("EmoteSearchBar", false) end
+        if workspace:GetAttribute("NoDashCooldown") == nil then workspace:SetAttribute("NoDashCooldown", false) end
+        if workspace:GetAttribute("NoFatigue") == nil then workspace:SetAttribute("NoFatigue", false) end
+    end
+    initExploits()
+
+    local Splix = loadstring(game:HttpGet("https://raw.githubusercontent.com/bloodball/-back-ups-for-libs/main/Splix"))()
+
+    local function runIntro()
+        local introGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
+        introGui.IgnoreGuiInset = true
+        
+        local bg = Instance.new("Frame", introGui)
+        bg.Size = UDim2.new(1, 0, 1, 0)
+        bg.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+        bg.BorderSizePixel = 0
+
+        local grad = Instance.new("UIGradient", bg)
+        grad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(5, 5, 5)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(25, 25, 25)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(5, 5, 5))
+        })
+
+        local vignette = Instance.new("ImageLabel", bg)
+        vignette.Size = UDim2.new(1, 0, 1, 0)
+        vignette.BackgroundTransparency = 1
+        vignette.Image = "rbxassetid://14343169555"
+        vignette.ImageColor3 = Color3.new(0,0,0)
+        vignette.ImageTransparency = 0.2
+
+        -- Main Title with Animation Setup
+        local mainTitle = Instance.new("TextLabel", bg)
+        mainTitle.Size = UDim2.new(0, 600, 0, 120)
+        mainTitle.Position = UDim2.new(0.5, 0, 0.48, 0) 
+        mainTitle.AnchorPoint = Vector2.new(0.5, 0.5)
+        mainTitle.BackgroundTransparency = 1
+        mainTitle.Text = "YAV HUB"
+        mainTitle.Font = Enum.Font.LuckiestGuy
+        mainTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+        mainTitle.TextScaled = true
+        mainTitle.TextTransparency = 1
+        
+        local titleStroke = Instance.new("UIStroke", mainTitle)
+        titleStroke.Thickness = 0
+        titleStroke.Color = Color3.fromRGB(255, 255, 255)
+        titleStroke.Transparency = 1
+
+        local discordLink = Instance.new("TextLabel", bg)
+        discordLink.Size = UDim2.new(0, 400, 0, 30)
+        discordLink.Position = UDim2.new(0.5, 0, 0.57, 0)
+        discordLink.AnchorPoint = Vector2.new(0.5, 0.5)
+        discordLink.BackgroundTransparency = 1
+        discordLink.Text = "discord.gg/S5GcQUG5"
+        discordLink.Font = Enum.Font.Code
+        discordLink.TextColor3 = Color3.fromRGB(150, 150, 150)
+        discordLink.TextSize = 20
+        discordLink.TextTransparency = 1
+
+        local loadText = Instance.new("TextLabel", bg)
+        loadText.Size = UDim2.new(0, 300, 0, 20)
+        loadText.Position = UDim2.new(0.5, 0, 0.92, 0)
+        loadText.AnchorPoint = Vector2.new(0.5, 0.5)
+        loadText.BackgroundTransparency = 1
+        loadText.Text = ""
+        loadText.Font = Enum.Font.Code
+        loadText.TextColor3 = Color3.fromRGB(255, 255, 255)
+        loadText.TextSize = 14
+
+        local s = Instance.new("Sound", SoundService)
+        s.Name = "yav_Intro"
+        s.SoundId = "rbxassetid://90910277186238"
+        s.Volume = 2
+        s:Play()
+
+        -- Text Breathing Animation
+        task.spawn(function()
+            while bg.Parent do
+                TweenService:Create(mainTitle, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Size = UDim2.new(0, 650, 0, 130)}):Play()
+                TweenService:Create(titleStroke, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Thickness = 6, Transparency = 0.6}):Play()
+                task.wait(1.5)
+                TweenService:Create(mainTitle, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Size = UDim2.new(0, 600, 0, 120)}):Play()
+                TweenService:Create(titleStroke, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Thickness = 2, Transparency = 0.9}):Play()
+                task.wait(1.5)
+            end
+        end)
+
+        -- Typing Effect Function
+        local function typeWrite(label, text)
+            for i = 1, #text do
+                label.Text = string.sub(text, 1, i)
+                task.wait(0.05)
+            end
+        end
+
+        -- Animation Start
+        task.wait(0.5)
+        TweenService:Create(mainTitle, TweenInfo.new(0.8), {TextTransparency = 0}):Play()
+        TweenService:Create(discordLink, TweenInfo.new(0.8), {TextTransparency = 0}):Play()
+        task.spawn(function() typeWrite(loadText, "> INITIALIZING YAV_SYSTEM...") end)
+        
+        task.wait(2.5)
+        
+        local fadeOut = TweenService:Create(bg, TweenInfo.new(0.8), {BackgroundTransparency = 1})
+        TweenService:Create(mainTitle, TweenInfo.new(0.6), {TextTransparency = 1}):Play()
+        TweenService:Create(titleStroke, TweenInfo.new(0.6), {Transparency = 1}):Play()
+        TweenService:Create(discordLink, TweenInfo.new(0.6), {TextTransparency = 1}):Play()
+        TweenService:Create(loadText, TweenInfo.new(0.6), {TextTransparency = 1}):Play()
+        TweenService:Create(vignette, TweenInfo.new(0.6), {ImageTransparency = 1}):Play()
+        
+        fadeOut:Play()
+        fadeOut.Completed:Wait()
+        introGui:Destroy()
+    end
+    runIntro()
+
+    Window = Splix:new({ name = "/yav hub", color = UIAccent, font = UIFont, textsize = UITextSize })
+    Window:setkey(Enum.KeyCode.RightControl)
+    
+    local MainPage = Window:page({ name = "Main" })
+    local VisualPage = Window:page({ name = "Visuals" })
+    local MiscPage = Window:page({ name = "Misc" })
+    local SettingsPage = Window:page({ name = "Settings" })
+    MainPage:openpage()
+
+    -- [KEEPING ALL ORIGINAL BUTTONS AND SECTIONS]
+    local Mov = MainPage:section({ name = "Movement", side = "left", size = 450 })
+    Mov:toggle({ name = "Speed Boost", callback = function(v) SpeedBoostEnabled = v end })
+    Mov:slider({ name = "Speed", min = 0, max = 5, def = 0.1, callback = function(v) tspeed = v end })
+    Mov:toggle({ name = "Jump Boost", callback = function(v) JumpBoostEnabled = v local h = LocalPlayer.Character:FindFirstChild("Humanoid") if h then h.UseJumpPower = not v end end })
+    Mov:slider({ name = "Jump Height", min = 7.2, max = 500, def = 7.2, callback = function(v) local h = LocalPlayer.Character:FindFirstChild("Humanoid") if h then h.JumpHeight = v end end })
+    Mov:slider({ name = "Gravity", min = 0, max = 192.6, def = 192.6, callback = function(v) workspace.Gravity = v end })
+    Mov:slider({ name = "FOV", min = 0, max = 120, def = 70, callback = function(v) Camera.FieldOfView = v end })
+    Mov:toggle({ name = "Noclip", callback = function(v) NoclipEnabled = v end })
+    Mov:toggle({ name = "Infinite Jump", callback = function(v) InfiniteJumpEnabled = v end })
+
+    local TSB = MainPage:section({ name = "TSB Exploits", side = "right", size = 330 })
+    TSB:toggle({ name = "No Dash Cooldown", callback = function(v) workspace:SetAttribute("NoDashCooldown", v) end })
+    TSB:toggle({ name = "No Fatigue", callback = function(v) workspace:SetAttribute("NoFatigue", v) end })
+    TSB:toggle({ name = "Emotes Extra Slots", callback = function(v) LocalPlayer:SetAttribute("ExtraSlots", v) end })
+    TSB:toggle({ name = "Emotes Search Bar", callback = function(v) LocalPlayer:SetAttribute("EmoteSearchBar", v) end })
+
+    local Vis = VisualPage:section({ name = "ESP", side = "left", size = 250 })
+    Vis:toggle({ name = "Enable ESP", callback = function(v) ESPEnabled = v end })
+    Vis:toggle({ name = "Tracers", callback = function(v) TracersEnabled = v end })
+    Vis:toggle({ name = "Health Bars", callback = function(v) ShowHealthBars = v end })
+
+    local Atmo = VisualPage:section({ name = "Atmosphere", side = "right", size = 320 })
+    Atmo:slider({ name = "Density", min = 0, max = 10, callback = function(v) local a = Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere", Lighting) a.Density = v/10 end })
+    Atmo:slider({ name = "Brightness", min = 0, max = 50, def = 2, callback = function(v) Lighting.Brightness = v end })
+    Atmo:slider({ name = "Clock Time", min = 0, max = 24, def = 12, callback = function(v) Lighting.ClockTime = v end })
+    Atmo:slider({ name = "Exposure", min = -50, max = 50, def = 0, callback = function(v) Lighting.ExposureCompensation = v/10 end })
+    Atmo:colorpicker({ name = "Outdoor Ambient", def = Color3.fromRGB(128, 128, 128), callback = function(c) Lighting.OutdoorAmbient = c end })
+    Atmo:toggle({ name = "Global Shadows", callback = function(v) Lighting.GlobalShadows = v end })
+    Atmo:toggle({ name = "Remove Fog", callback = function(v) if v then Lighting.FogEnd = 999999 else Lighting.FogEnd = 1000 end end })
+    
+    local SkySec = VisualPage:section({ name = "Custom Sky", side = "right", size = 150 })
+    SkySec:dropdown({ name = "Sky Preset", options = {"Purple Nebula", "Night Sky", "Pink Day", "Twilight"}, callback = function(v) setSky(Skyboxes[v]) end })
+    SkySec:button({ name = "Reset Sky", callback = function() local sky = Lighting:FindFirstChildOfClass("Sky") if sky then sky:Destroy() end end })
+
+    local TechTab = MiscPage:section({ name = "Tech", side = "left", size = 310 })
+    local AccTab = MiscPage:section({ name = "Accessories", side = "left", size = 150 })
+    local MoveTab = MiscPage:section({ name = "Movesets", side = "right", size = 250 })
+    local Uni = MiscPage:section({ name = "Universal", side = "right", size = 280 })
+
+    TechTab:button({ name = "Kiba v3", callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/MerebennieOfficial/ExoticJn/refs/heads/main/KibaV3"))() end })
+    TechTab:button({ name = "LoopDash V2", callback = function() loadstring(game:HttpGet("https://api.getpolsec.com/scripts/hosted/84e2bd29cccc0f5302267e4dc952cff6816db4af36416cbd477daaa26d60863d.lua"))() end })
+    TechTab:button({ name = "Supa v2", callback = function() loadstring(game:HttpGet("https://api.getpolsec.com/scripts/hosted/2753546c83053761e44664d36ffe5035d6e20fc8aee1d19f0eb7b933974ae537.lua"))() end })
+    TechTab:button({ name = "Instant Twisted", callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Cyborg883/InstantTwistedRevamp/refs/heads/main/Protected_7455521176683315.lua"))() end })
+    TechTab:button({ name = "Auto Tech", callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Cyborg883/NewAutoTech/refs/heads/main/Protected_6389347658054908.lua"))() end })
+    TechTab:button({ name = "Dripz", callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/letuankiet09812345-cmyk/Testkiba/refs/heads/main/4cbcd9b905ee3e41.lua.txt"))() end })
+    TechTab:button({ name = "Instant Lethal Revamp", callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Cyborg883/InstantLethalRevamp/refs/heads/main/Protected_6977817281150270.lua"))() end })
+    TechTab:button({ name = "Gojo Tech", callback = function() loadstring(game:HttpGet("https://gojotech.tsbscripts.workers.dev/"))() end })
+
+    AccTab:button({ name = "Elemental Crystal", callback = function() loadstring(game:HttpGet("https://pastebin.com/raw/rvmattjm"))() end })
+    AccTab:button({ name = "Erisyphia Staff", callback = function() loadstring(game:HttpGet("https://pastebin.com/raw/y4am2Jct"))() end })
+    AccTab:button({ name = "Korblox & Headless", callback = function() loadstring(game:HttpGet("https://pastebin.com/raw/2vWhiQLd"))() end })
+
+    MoveTab:button({ name = "Jiren (Garou)", callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/sparksnaps/Jiren-Moveset-V2/refs/heads/main/Lua"))() end })
+    MoveTab:button({ name = "Cosmic Garou (Garou)", callback = function() loadstring(game:HttpGet("https://pastebin.com/raw/kT3Z8rse"))() end })
+    MoveTab:button({ name = "Invincible (Saitama)", callback = function() loadstring(game:HttpGet("https://pastefy.app/BtDQqi2c/raw"))() end })
+    MoveTab:button({ name = "Cid (Saitama)", callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/sparksnaps/Lord-Shadow-Beta/refs/heads/main/Lua"))() end })
+    MoveTab:button({ name = "Dio (Garou)", callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Medley-Taboritsky/RobloxScripting/refs/heads/main/DIO_Garou_TSB"))() end })
+    MoveTab:button({ name = "Sans (Tatsumaki)", callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Qaiddanial2904/ROBLOX-FREAKY-GOJO-REAL/refs/heads/main/SANS%20%5BREDACTED%5D"))() end })
+
+    Uni:button({ name = "Anti Lag", callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/marianscriptKing/SUPER-MAX.lau/main/SUPER%20MAX%20PERFORMANCE"))() end })
+    Uni:button({ name = "Lock", callback = function() loadstring(game:HttpGet("https://pastefy.app/UqzfJvg8/raw"))() end })
+    Uni:button({ name = "Infinite Yield", callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))() end })
+    Uni:button({ name = "Dex Explorer", callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/infyiff/backup/main/dex.lua"))() end })
+    Uni:button({ name = "Rejoin Server", callback = function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end })
+    Uni:button({ name = "Server Hop", callback = function()
+        local servers = {}
+        local req = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"))
+        for _, s in pairs(req.data) do if s.playing < s.maxPlayers and s.id ~= game.JobId then table.insert(servers, s.id) end end
+        if #servers > 0 then TeleportService:TeleportToPlaceInstance(game.PlaceId, servers[math.random(1, #servers)], LocalPlayer) end
+    end })
+    Uni:button({ name = "Fake Animation", callback = function() loadstring(game:HttpGet('https://raw.githubusercontent.com/Mautiku/ehh/main/strong%20guest.lua.txt'))() end })
+
+    local MusicSec = SettingsPage:section({ name = "Music Player", side = "left", size = 220 })
+    MusicSec:dropdown({ name = "Select Song", options = {"Track 1", "Track 2", "Track 3", "Track 4", "Track 5", "Track 6"}, callback = function(v) 
+        PlayTrack(MusicList[v])
+    end })
+    MusicSec:slider({ name = "Volume", min = 0, max = 10, def = 5, callback = function(v) 
+        GlobalMusicVolume = v/10 
+        if CurrentActiveSound then CurrentActiveSound.Volume = GlobalMusicVolume end
+    end })
+    MusicSec:button({ name = "Stop & Unmute Game", callback = function() 
+        MuteActive = false
+        if CurrentActiveSound then CurrentActiveSound:Stop() end 
+    end })
+
+    local Sett = SettingsPage:section({ name = "Config", side = "left", size = 150 })
+    Sett:keybind({ name = "UI Toggle", def = Enum.KeyCode.RightControl, callback = function(k) Window:setkey(k) end })
+    Sett:button({ name = "Copy Discord", callback = function() setclipboard("https://discord.gg/S5GcQUG5") end })
+
+    local Cust = SettingsPage:section({ name = "UI Customization", side = "right", size = 320 })
+    Cust:colorpicker({ name = "Accent", def = UIAccent, callback = function(c) RainbowUIEnabled = false UIAccent = c pcall(function() Window:settheme("accent", c) end) end })
+    Cust:toggle({ name = "Rainbow Accent", callback = function(v) RainbowUIEnabled = v end })
+    Cust:dropdown({ name = "Font", options = {"GothamBold", "SpecialElite", "Jura", "Antique", "Bangers", "Ubuntu", "Creepster", "GrenzeGotisch"}, callback = function(v) UIFont = Enum.Font[v] pcall(function() Window:setfont(UIFont) end) end })
+    Cust:slider({ name = "Text Size", min = 12, max = 24, def = 15, callback = function(v) UITextSize = v pcall(function() Window:settextsize(v) end) end })
+
+    local function createDrawings(player)
+        if DrawCache[player] then return end
+        DrawCache[player] = {
+            boxOutline = Drawing.new("Square"), box = Drawing.new("Square"),
+            tracer = Drawing.new("Line"), name = Drawing.new("Text"),
+            healthBarOutline = Drawing.new("Square"), healthBar = Drawing.new("Square")
+        }
+        local d = DrawCache[player]
+        d.boxOutline.Thickness = 3 d.boxOutline.Color = Color3.new(0,0,0)
+        d.box.Thickness = 1 d.tracer.Thickness = 1
+        d.name.Size = 14 d.name.Outline = true d.name.Center = true
+        d.healthBarOutline.Thickness = 2 d.healthBarOutline.Color = Color3.new(0,0,0)
+        d.healthBar.Thickness = 1
+    end
+
+    RunService.Heartbeat:Connect(function()
+        if RainbowUIEnabled then Window:settheme("accent", Color3.fromHSV((tick()*0.2)%1, 0.8, 1)) end
+        
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local hum = char and char:FindFirstChild("Humanoid")
+        
+        if SpeedBoostEnabled and hrp and hum and hum.MoveDirection.Magnitude > 0 then hrp.CFrame = hrp.CFrame + (hum.MoveDirection * tspeed) end
+        if NoclipEnabled and char then for _, v in pairs(char:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end end
+        
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p == LocalPlayer then continue end
+            createDrawings(p)
+            local d, tc = DrawCache[p], p.Character
+            local th, t_hum = tc and tc:FindFirstChild("HumanoidRootPart"), tc and tc:FindFirstChildOfClass("Humanoid")
+            local pos, vis = nil, false
+            if th then pos, vis = Camera:WorldToViewportPoint(th.Position) end
+
+            if ESPEnabled and th and t_hum and vis and t_hum.Health > 0 then
+                local top = Camera:WorldToViewportPoint(th.Position + Vector3.new(0, 3, 0))
+                local bottom = Camera:WorldToViewportPoint(th.Position - Vector3.new(0, 3.5, 0))
+                local h, w = math.abs(top.Y - bottom.Y), math.abs(top.Y - bottom.Y) * 0.6
+                d.boxOutline.Visible = true d.boxOutline.Size = Vector2.new(w, h) d.boxOutline.Position = Vector2.new(pos.X - w/2, pos.Y - h/2)
+                d.box.Visible = true d.box.Size = d.boxOutline.Size d.box.Position = d.boxOutline.Position d.box.Color = ESPColor
+                if TracersEnabled then d.tracer.Visible = true d.tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y) d.tracer.To = Vector2.new(pos.X, pos.Y + h/2) d.tracer.Color = ESPColor else d.tracer.Visible = false end
+                if ShowHealthBars then
+                    local hpPercent = t_hum.Health / t_hum.MaxHealth
+                    d.healthBarOutline.Visible = true d.healthBarOutline.Size = Vector2.new(4, h) d.healthBarOutline.Position = Vector2.new(pos.X - w/2 - 6, pos.Y - h/2)
+                    d.healthBar.Visible = true d.healthBar.Size = Vector2.new(2, h * hpPercent) d.healthBar.Position = Vector2.new(pos.X - w/2 - 5, pos.Y + h/2 - (h * hpPercent))
+                    d.healthBar.Color = Color3.fromRGB(255 - (255 * hpPercent), 255 * hpPercent, 0)
+                else d.healthBarOutline.Visible = false d.healthBar.Visible = false end
+            else if d then for _,v in pairs(d) do v.Visible = false end end end
+        end
+    end)
+    UserInputService.JumpRequest:Connect(function() if InfiniteJumpEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping) end end)
+end)
+
+if not okMain then warn("yav hub error: " .. tostring(errMain)) end
